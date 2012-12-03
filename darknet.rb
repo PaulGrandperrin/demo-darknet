@@ -24,7 +24,9 @@ class Node
 	attr_reader :id
 	attr_accessor :pos
 
-	def initialize id
+
+	def initialize id, darknet
+		@darknet = darknet
 		@id = id
 		@pos = Position.new
 	end
@@ -32,11 +34,70 @@ class Node
 	def distance a
 		return self.pos.distance a.pos
 	end
+
+	def links
+		return @darknet.links.select{|l| l[0] == self.id or l[1] == self.id}
+	end
+
+	def friends
+		return self.links.map{|l| @darknet.nodes[l[0] == self.id ? l[1] : l[0] ]}
+	end
+
+	def greedyRoute dest, excludedNodes = []
+
+		if friends.include? dest
+			return true, [[self.id,dest.id]]
+		end
+
+
+		# get friends ordered by proximity with destination
+		bestFriends = (friends - excludedNodes).sort_by{|node| dest.distance(node)}
+		
+		valid = false
+		route = nil
+
+		while not valid and not bestFriends.empty?
+			friend=bestFriends.shift
+			valid, route = friend.greedyRoute dest, excludedNodes.push(self)
+		end
+
+		if valid
+			return true, route.push([self.id, route.last[0]])
+		else
+			return false, nil
+		end
+	end
+
+	def randomRoute dest, excludedNodes = []
+
+		if friends.include? dest
+			return true, [[self.id,dest.id]]
+		end
+
+
+		# get friends ordered by proximity with destination
+		bestFriends = (friends - excludedNodes).shuffle
+		
+		valid = false
+		route = nil
+
+		while not valid and not bestFriends.empty?
+			friend=bestFriends.shift
+			valid, route = friend.randomRoute dest, excludedNodes.push(self)
+		end
+
+		if valid
+			return true, route.push([self.id, route.last[0]])
+		else
+			return false, nil
+		end
+	end
 end
+
 
 class Darknet
 
-	attr_reader :nodes, :links, :closeFriendRatio
+	attr_reader :nodes, :links, :randomRoute, :greedyRoute, :nearbyFriendRatio, :nbFriends
 
 	def initialize
 
@@ -46,6 +107,10 @@ class Darknet
 		# The list of links between nodes
 		@links = Array.new
 
+		# The last routes being computed
+		@greedyRoute = Array.new
+		@randomRoute = Array.new
+
 		# The nearby friend ratio determine how nodes choose their friends.
 		# The bigger the ratio is, the more the proximity will be an important factor.
 		# Example:
@@ -54,10 +119,10 @@ class Darknet
 		# 2..inf ->	the odds of being friend with a node is based on a polynomial formula of degree n
 		# the exact formula is based on the circle formula (which is x² + y² = 1) :
 		# probabilyOfBeingFriend = 1 - (1 - (distance - 1) ** n) ** (1/n)
-		@nearbyFriendRatio=0
+		@nearbyFriendRatio=5
 
 		# The number of friends of each nodes
-		@nbFriends = 0
+		@nbFriends = 4
 
 	end # def initialize
 
@@ -68,9 +133,16 @@ class Darknet
 	end #def cleanNetwork
 
 	def addFriendToNode node
-		chanceFactor = 1
+		chanceFactorCounter = @nodes.size
+		chanceFactor = 5
+		nodesToTest = []
 		while true
-			n = @nodes[rand(@nodes.size)]
+			if chanceFactorCounter == 0
+				chanceFactorCounter = @nodes.size
+				chanceFactor *= 2
+			end
+
+			n=@nodes[rand(@nodes.size)]
 
 			if @links.include? [node.id, n.id] or @links.include? [n.id, node.id] or n == node
 				next
@@ -83,7 +155,8 @@ class Darknet
 			if @nearbyFriendRatio == 0
 				p = 1
 			else
-				p = 1.0 - ( 1.0 - (dist - 1.0) ** (@nearbyFriendRatio)) ** (1.0 / (@nearbyFriendRatio))
+				p = 1.0 - ( 1.0 - (dist - 1.0) ** (@nearbyFriendRatio*2)) ** (1.0 / (@nearbyFriendRatio*2))
+				p /= @nodes.size
 				p *= chanceFactor
 			end
 
@@ -91,13 +164,12 @@ class Darknet
 				@links.push [node.id, n.id]
 				break
 			end
-
-			chanceFactor *= 1.1
+			chanceFactorCounter -= 1
 		end
 	end
 
 	def addNode
-		newNode = Node.new @nodes.size
+		newNode = Node.new @nodes.size, self
 		@nodes.push newNode
 	    		
 		nbFriends = [@nodes.size-1, @nbFriends].min
@@ -110,10 +182,12 @@ class Darknet
 
 	def recomputeFriends
 		@links = Array.new
+		@greedyRoute = Array.new
+		@randomRoute = Array.new
 
 		@nodes.each do |node|
 			nbFriends = [@nodes.size-1, @nbFriends].min
-			(nbFriends-@links.select{|l| l[0] == node.id or l[1] == node.id}.size).times{ addFriendToNode node }		
+			(nbFriends-node.links.size).times{ addFriendToNode node }		
 		end
 
 		cleanNetwork
@@ -127,7 +201,7 @@ class Darknet
 
 
 	def changeNearbyFriendRatio r
-		@nearbyFriendRatio = r * 2
+		@nearbyFriendRatio = r
 		recomputeFriends
 	end # def changeNearbyFriendRatio
 
@@ -136,6 +210,15 @@ class Darknet
 		@nbFriends = n
 		recomputeFriends
 	end # def changeNbFriends
+
+
+	def computeRoutes
+		nodeA = @nodes[rand(@nodes.size)]
+		nodeB = @nodes[rand(@nodes.size)]
+
+		valid,@greedyRoute = nodeA.greedyRoute nodeB
+		valid,@randomRoute = nodeA.randomRoute nodeB
+	end
 
 end
 
@@ -155,12 +238,12 @@ class MainWindow < Qt::Widget
 
         @spinBoxNFR = Qt::SpinBox.new
         @spinBoxNFR.setMinimum 0
-        @spinBoxNFR.setValue 0
+        @spinBoxNFR.setValue @darknet.nearbyFriendRatio
         connect(@spinBoxNFR, SIGNAL('valueChanged(int)'), self, SLOT('changeNearbyFriendRatio(int)'))
 
 		@spinBoxNBF = Qt::SpinBox.new
         @spinBoxNBF.setMinimum 0
-        @spinBoxNBF.setValue 0
+        @spinBoxNBF.setValue @darknet.nbFriends
         connect(@spinBoxNBF, SIGNAL('valueChanged(int)'), self, SLOT('changeNbFriends(int)'))
 
         @networkWidget = NetworkWidget.new
@@ -211,10 +294,14 @@ class MainWindow < Qt::Widget
 		    	@darknet.recomputePositions
 		    	self.repaint
 
+		    when Qt::Key_R
+		    	@darknet.computeRoutes
+		    	self.repaint
+
 		    when Qt::Key_D
 		    	@darknet = Darknet.new
 		    	@networkWidget.darknet = @darknet
-		    	@darknet.changeNearbyFriendRatio @spinBoxNBF .value
+		    	@darknet.changeNearbyFriendRatio @spinBoxNBF.value
 		    	@darknet.changeNbFriends @spinBoxNBF.value
 		    	self.repaint 
 
@@ -241,15 +328,32 @@ class NetworkWidget < Qt::Widget
 		painter.setPen Qt::Color::new 100, 100, 255
 
 		@darknet.links.each do |link|
- 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.9)+w*0.05, @darknet.nodes[link[0]].pos.y*(h*0.9)+h*0.05, @darknet.nodes[link[1]].pos.x*(w*0.9)+w*0.05, @darknet.nodes[link[1]].pos.y*(h*0.9)+h*0.05
+ 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[0]].pos.y*(h*0.95)+h*0.025, @darknet.nodes[link[1]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[1]].pos.y*(h*0.95)+h*0.025
  		end
 
+ 		pen = Qt::Pen.new
+ 		pen.setColor Qt::Color::new 0, 255, 0
+ 		pen.setWidth 4
+ 		painter.setPen pen 
+
+		@darknet.randomRoute.each do |link|
+ 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[0]].pos.y*(h*0.95)+h*0.025, @darknet.nodes[link[1]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[1]].pos.y*(h*0.95)+h*0.025
+ 		end
+
+ 		pen = Qt::Pen.new
+ 		pen.setColor Qt::Color::new 255, 0, 0
+ 		pen.setWidth 2
+ 		painter.setPen pen 
+
+		@darknet.greedyRoute.each do |link|
+ 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[0]].pos.y*(h*0.95)+h*0.025, @darknet.nodes[link[1]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[1]].pos.y*(h*0.95)+h*0.025
+ 		end
 
 		painter.setPen Qt::Color::new 255, 255, 255
 		painter.setBrush Qt::Brush.new Qt::Color::new 255, 100, 100
 
 		@darknet.nodes.each do |node|
-			 painter.drawEllipse  node.pos.x*(w*0.9)-5+w*0.05, node.pos.y*(h*0.9)-5+h*0.05, 10, 10
+			 painter.drawEllipse  node.pos.x*(w*0.95)-5+w*0.025, node.pos.y*(h*0.95)-5+h*0.025, 10, 10
 		end
 
         painter.end
