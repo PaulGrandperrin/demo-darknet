@@ -49,30 +49,28 @@ class Node
 
 	def chooseSmallWorldFriends nodes, nbFriends, nearbyFriendFactor
 
-		nbFriends = [nodes.size - 1, nbFriends].min
-		nodes = nodes - [self]
+		nbFriends = [nodes.size - 1 - @friends.size, nbFriends].min
+		nodes = nodes - [self] - @friends
 
 		if nearbyFriendFactor == 0
 			nbFriends.times do
 				node = nodes.choice
 				
-				@friends.push node
-				nodes.delete node				
+				self.addFriend node
+				node.addFriend self
+				nodes.delete node
 			end
 		else
 			# TODO rework that to be more accurate
 			nodes = nodes.sort_by{|n| self.distance n}
 			
-			nbFriends.times do
+			nbFriends.times do				
 				node = nodes[((1.0-(1.0-rand()**(nearbyFriendFactor*2.0))**(1.0/(nearbyFriendFactor*2.0)))*nodes.size).floor]
 
-				@friends.push node
+				self.addFriend node
+				node.addFriend self
 				nodes.delete node
 			end
-		end
-
-		@friends.each do |friend|
-			friend.addFriend self
 		end
 
 	end
@@ -186,6 +184,9 @@ class Darknet
 
 		@nodes.each do |node|
 			node.removeAllFriends
+		end
+
+		@nodes.each do |node|
 			node.chooseSmallWorldFriends @nodes, [@nodes.size-1, @nbFriends].min, @nearbyFriendFactor
 		end
 
@@ -199,7 +200,7 @@ class Darknet
 	end
 
 
-	def changenearbyFriendFactor r
+	def changeNearbyFriendFactor r
 		@nearbyFriendFactor = r
 		recomputeFriends
 	end # def changenearbyFriendFactor
@@ -212,6 +213,10 @@ class Darknet
 
 
 	def computeRoutes
+		if @nodes.size < 2
+			return
+		end
+
 		nodeA = @nodes.choice
 		nodeB = @nodes.choice
 
@@ -224,7 +229,7 @@ end
 class MainWindow < Qt::Widget
 
  	signals 'valueChanged(int)'
-  	slots 'changenearbyFriendFactor(int)'
+  	slots 'changeNearbyFriendFactor(int)'
   	slots 'changeNbFriends(int)'
 
     def initialize
@@ -232,26 +237,26 @@ class MainWindow < Qt::Widget
 
         @darknet = Darknet.new
 
-        resize 800, 480
+        resize 1024, 640
         setWindowTitle "Darknet Demo"
 
-        @spinBoxNFR = Qt::SpinBox.new
-        @spinBoxNFR.setMinimum 0
-        @spinBoxNFR.setValue @darknet.nearbyFriendFactor
-        connect(@spinBoxNFR, SIGNAL('valueChanged(int)'), self, SLOT('changenearbyFriendFactor(int)'))
+        @spinBoxNFF = Qt::SpinBox.new
+        @spinBoxNFF.setMinimum 0
+        @spinBoxNFF.setValue @darknet.nearbyFriendFactor
+        connect(@spinBoxNFF, SIGNAL('valueChanged(int)'), self, SLOT('changeNearbyFriendFactor(int)'))
 
-		@spinBoxNBF = Qt::SpinBox.new
-        @spinBoxNBF.setMinimum 0
-        @spinBoxNBF.setValue @darknet.nbFriends
-        connect(@spinBoxNBF, SIGNAL('valueChanged(int)'), self, SLOT('changeNbFriends(int)'))
+		@spinBoxNF = Qt::SpinBox.new
+        @spinBoxNF.setMinimum 0
+        @spinBoxNF.setValue @darknet.nbFriends
+        connect(@spinBoxNF, SIGNAL('valueChanged(int)'), self, SLOT('changeNbFriends(int)'))
 
         @networkWidget = NetworkWidget.new
         @networkWidget.darknet = @darknet
 
         menu = Qt::Widget.new
         menuL = Qt::FormLayout.new
-		menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFR
-        menuL.addRow Qt::Label.new("Number of friends"), @spinBoxNBF
+		menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFF
+        menuL.addRow Qt::Label.new("Number of friends"), @spinBoxNF
         menu.setLayout menuL
 
         layout = Qt::VBoxLayout.new
@@ -265,8 +270,8 @@ class MainWindow < Qt::Widget
         show
     end
 
-    def changenearbyFriendFactor r
-    	@darknet.changenearbyFriendFactor r
+    def changeNearbyFriendFactor r
+    	@darknet.changeNearbyFriendFactor r
     	self.repaint
     end
 
@@ -300,8 +305,8 @@ class MainWindow < Qt::Widget
 		    when Qt::Key_D
 		    	@darknet = Darknet.new
 		    	@networkWidget.darknet = @darknet
-		    	@darknet.changenearbyFriendFactor @spinBoxNBF.value
-		    	@darknet.changeNbFriends @spinBoxNBF.value
+		    	@darknet.changeNearbyFriendFactor @spinBoxNFF.value
+		    	@darknet.changeNbFriends @spinBoxNF.value
 		    	self.repaint 
 
 	    end
@@ -368,6 +373,20 @@ class NetworkWidget < Qt::Widget
 			 painter.drawEllipse  node.x*w-nodeSize/2, node.y*h-nodeSize/2, nodeSize, nodeSize
 		end
 
+		# Paint first and last node of the routes
+		if not @darknet.greedyRoute.empty?
+			painter.setPen Qt::Color::new 255, 255, 255
+			painter.setBrush Qt::Brush.new Qt::Color::new 0, 255, 0
+
+			node = @darknet.greedyRoute.last[0]
+			painter.drawEllipse  node.x*w-nodeSize, node.y*h-nodeSize, nodeSize*2, nodeSize*2
+
+			painter.setPen Qt::Color::new 255, 255, 255
+			painter.setBrush Qt::Brush.new Qt::Color::new 255, 0, 0
+
+			node = @darknet.greedyRoute.first[1]
+			painter.drawEllipse  node.x*w-nodeSize, node.y*h-nodeSize, nodeSize*2, nodeSize*2		
+		end
 
         painter.end
     end
