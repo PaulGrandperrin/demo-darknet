@@ -16,203 +16,184 @@
 
 
 # TODO List
-# Move node data in the node class: neighbor links
-# Serious performance optimisation and code refactoring
 # Improve GUI
 # Implement Swapping algorithm
 # Implement Object Search alhorithm
 # Make it all work together
 
 
-
 require 'Qt'
 
 
-class Position
+class Node
 
-	attr_reader :x, :y
+	attr_reader :id, :friends
+	attr_accessor :x, :y
 
-	def initialize x = nil, y= nil
-		@x = rand() unless x
-		@y = rand() unless y
+	def initialize id, position = nil
+		@id = id
+
+		if position.nil?
+			@x, @y = rand, rand
+		else
+			@x, @y = position
+		end
+
+		@friends = Array.new
 	end
 
 	# Euclidean distance
 	def distance a
 		return Math.sqrt((self.x-a.x)**2 + (self.y-a.y)**2)
 	end
-end
 
+	def chooseSmallWorldFriends nodes, nbFriends, nearbyFriendFactor
 
-class Node
+		nbFriends = [nodes.size - 1, nbFriends].min
+		nodes = nodes - [self]
 
-	attr_reader :id
-	attr_accessor :pos
+		if nearbyFriendFactor == 0
+			nbFriends.times do
+				node = nodes.choice
+				
+				@friends.push node
+				nodes.delete node				
+			end
+		else
+			# TODO rework that to be more accurate
+			nodes = nodes.sort_by{|n| self.distance n}
+			
+			nbFriends.times do
+				node = nodes[((1.0-(1.0-rand()**(nearbyFriendFactor*2.0))**(1.0/(nearbyFriendFactor*2.0)))*nodes.size).floor]
 
+				@friends.push node
+				nodes.delete node
+			end
+		end
 
-	def initialize id, darknet
-		@darknet = darknet
-		@id = id
-		@pos = Position.new
+		@friends.each do |friend|
+			friend.addFriend self
+		end
+
 	end
 
-	def distance a
-		return self.pos.distance a.pos
+	def addFriend node
+		@friends.push node
 	end
 
-	def links
-		return @darknet.links.select{|l| l[0] == self.id or l[1] == self.id}
+	def removeFriend node
+		self.friends.delete node
+		node.friends.delete self
 	end
 
-	def friends
-		return self.links.map{|l| @darknet.nodes[l[0] == self.id ? l[1] : l[0] ]}
+	def removeAllFriends
+		@friends.each do |friend|
+			self.removeFriend friend
+		end
 	end
 
+	# Returns the route to dest without passing through the excludedNodes. If it doesn't exist, returns nil
 	def greedyRoute dest, excludedNodes = []
 
-		if friends.include? dest
-			return true, [[self.id,dest.id]]
+		if @friends.include? dest
+			return [[self, dest]]
 		end
-
 
 		# get friends ordered by proximity with destination
-		bestFriends = (friends - excludedNodes).sort_by{|node| dest.distance(node)}
+		bestFriends = (@friends - excludedNodes - [self]).sort_by{|n| dest.distance n}
 		
-		valid = false
 		route = nil
+		friend = nil
 
-		while not valid and not bestFriends.empty?
-			friend=bestFriends.shift
-			valid, route = friend.greedyRoute dest, excludedNodes.push(self)
+		while route.nil? and not bestFriends.empty?
+			friend = bestFriends.shift
+			route = friend.greedyRoute dest, excludedNodes.push(self)
 		end
 
-		if valid
-			return true, route.push([self.id, route.last[0]])
+		if route
+			return route.push [self, friend]
 		else
-			return false, nil
+			return nil
 		end
 	end
 
 	def randomRoute dest, excludedNodes = []
 
-		if friends.include? dest
-			return true, [[self.id,dest.id]]
+		if @friends.include? dest
+			return [[self, dest]]
 		end
 
-
-		# get friends ordered by proximity with destination
-		bestFriends = (friends - excludedNodes).shuffle
+		# get friends ordered randomly
+		bestFriends = (@friends - excludedNodes - [self]).shuffle
 		
-		valid = false
 		route = nil
+		friend = nil
 
-		while not valid and not bestFriends.empty?
-			friend=bestFriends.shift
-			valid, route = friend.randomRoute dest, excludedNodes.push(self)
+		while route.nil? and not bestFriends.empty?
+			friend = bestFriends.shift
+			route = friend.randomRoute dest, excludedNodes.push(self)
 		end
 
-		if valid
-			return true, route.push([self.id, route.last[0]])
+		if route
+			return route.push([self, friend])
 		else
-			return false, nil
+			return nil
 		end
+		
 	end
 end
 
 
 class Darknet
 
-	attr_reader :nodes, :links, :randomRoute, :greedyRoute, :nearbyFriendRatio, :nbFriends
+	attr_reader :nodes, :randomRoute, :greedyRoute, :nearbyFriendFactor, :nbFriends
 
 	def initialize
 
 		# The list of nodes
 		@nodes = Array.new
 
-		# The list of links between nodes
-		@links = Array.new
-
-		# The last routes being computed
+		# The last routes that have been computed
 		@greedyRoute = Array.new
 		@randomRoute = Array.new
 
-		# The nearby friend ratio determine how nodes choose their friends.
-		# The bigger the ratio is, the more the proximity will be an important factor.
+		# The nearby friend factor determine how nodes choose their friends.
+		# The bigger the factor is, the more the proximity will be an important factor.
 		# Example:
 		# 0 ->		the odds of being friend with a node is the same for every node
 		# 1 ->		the odds of being friend with a node is inversely proportional to the distance between them
 		# 2..inf ->	the odds of being friend with a node is based on a polynomial formula of degree n
 		# the exact formula is based on the circle formula (which is x² + y² = 1) :
 		# probabilyOfBeingFriend = 1 - (1 - (distance - 1) ** n) ** (1/n)
-		@nearbyFriendRatio=5
+		@nearbyFriendFactor = 2
 
 		# The number of friends of each nodes
-		@nbFriends = 4
+		@nbFriends = 10
 
 	end # def initialize
 
 
-	# Remove links from nodes with too many friends without leaving nodes with too few friends
+	# Remove friends from nodes with too many friends without leaving nodes with too few friends
 	def cleanNetwork
-		# TODO 
+		# TODO implement
 	end #def cleanNetwork
 
-	def addFriendToNode node
-		chanceFactorCounter = @nodes.size
-		chanceFactor = 5
-		nodesToTest = []
-		while true
-			if chanceFactorCounter == 0
-				chanceFactorCounter = @nodes.size
-				chanceFactor *= 2
-			end
-
-			n=@nodes[rand(@nodes.size)]
-
-			if @links.include? [node.id, n.id] or @links.include? [n.id, node.id] or n == node
-				next
-			end
-
-			# We normalize our distance by the maximum possible distance in the plane
-			dist = node.distance(n) / Math.sqrt(2)
-			
-			# Our friendyness formula
-			if @nearbyFriendRatio == 0
-				p = 1
-			else
-				p = 1.0 - ( 1.0 - (dist - 1.0) ** (@nearbyFriendRatio*2)) ** (1.0 / (@nearbyFriendRatio*2))
-				p /= @nodes.size
-				p *= chanceFactor
-			end
-
-			if rand() < p
-				@links.push [node.id, n.id]
-				break
-			end
-			chanceFactorCounter -= 1
-		end
-	end
-
 	def addNode
-		newNode = Node.new @nodes.size, self
+		newNode = Node.new @nodes.size
 		@nodes.push newNode
 	    		
-		nbFriends = [@nodes.size-1, @nbFriends].min
-		nbFriends.times{ addFriendToNode newNode }
-
+		newNode.chooseSmallWorldFriends @nodes, [@nodes.size-1, @nbFriends].min, @nearbyFriendFactor
 
 		cleanNetwork
-
 	end # def addNode
 
 	def recomputeFriends
-		@links = Array.new
 		@greedyRoute = Array.new
 		@randomRoute = Array.new
 
 		@nodes.each do |node|
-			nbFriends = [@nodes.size-1, @nbFriends].min
-			(nbFriends-node.links.size).times{ addFriendToNode node }		
+			node.removeAllFriends
+			node.chooseSmallWorldFriends @nodes, [@nodes.size-1, @nbFriends].min, @nearbyFriendFactor
 		end
 
 		cleanNetwork
@@ -220,15 +201,15 @@ class Darknet
 
 	def recomputePositions
 		@nodes.each do |node|
-			node.pos=Position.new
+			node.x, node.y = rand, rand
 		end
 	end
 
 
-	def changeNearbyFriendRatio r
-		@nearbyFriendRatio = r
+	def changenearbyFriendFactor r
+		@nearbyFriendFactor = r
 		recomputeFriends
-	end # def changeNearbyFriendRatio
+	end # def changenearbyFriendFactor
 
 
 	def changeNbFriends n
@@ -238,11 +219,11 @@ class Darknet
 
 
 	def computeRoutes
-		nodeA = @nodes[rand(@nodes.size)]
-		nodeB = @nodes[rand(@nodes.size)]
+		nodeA = @nodes.choice
+		nodeB = @nodes.choice
 
-		valid,@greedyRoute = nodeA.greedyRoute nodeB
-		valid,@randomRoute = nodeA.randomRoute nodeB
+		@greedyRoute = nodeA.greedyRoute nodeB
+		@randomRoute = nodeA.randomRoute nodeB
 	end
 
 end
@@ -250,7 +231,7 @@ end
 class MainWindow < Qt::Widget
 
  	signals 'valueChanged(int)'
-  	slots 'changeNearbyFriendRatio(int)'
+  	slots 'changenearbyFriendFactor(int)'
   	slots 'changeNbFriends(int)'
 
     def initialize
@@ -263,8 +244,8 @@ class MainWindow < Qt::Widget
 
         @spinBoxNFR = Qt::SpinBox.new
         @spinBoxNFR.setMinimum 0
-        @spinBoxNFR.setValue @darknet.nearbyFriendRatio
-        connect(@spinBoxNFR, SIGNAL('valueChanged(int)'), self, SLOT('changeNearbyFriendRatio(int)'))
+        @spinBoxNFR.setValue @darknet.nearbyFriendFactor
+        connect(@spinBoxNFR, SIGNAL('valueChanged(int)'), self, SLOT('changenearbyFriendFactor(int)'))
 
 		@spinBoxNBF = Qt::SpinBox.new
         @spinBoxNBF.setMinimum 0
@@ -276,7 +257,7 @@ class MainWindow < Qt::Widget
 
         menu = Qt::Widget.new
         menuL = Qt::FormLayout.new
-		menuL.addRow Qt::Label.new("Nearby Friend Ratio"), @spinBoxNFR
+		menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFR
         menuL.addRow Qt::Label.new("Number of friends"), @spinBoxNBF
         menu.setLayout menuL
 
@@ -291,8 +272,8 @@ class MainWindow < Qt::Widget
         show
     end
 
-    def changeNearbyFriendRatio r
-    	@darknet.changeNearbyFriendRatio r
+    def changenearbyFriendFactor r
+    	@darknet.changenearbyFriendFactor r
     	self.repaint
     end
 
@@ -326,7 +307,7 @@ class MainWindow < Qt::Widget
 		    when Qt::Key_D
 		    	@darknet = Darknet.new
 		    	@networkWidget.darknet = @darknet
-		    	@darknet.changeNearbyFriendRatio @spinBoxNBF.value
+		    	@darknet.changenearbyFriendFactor @spinBoxNBF.value
 		    	@darknet.changeNbFriends @spinBoxNBF.value
 		    	self.repaint 
 
@@ -350,20 +331,31 @@ class NetworkWidget < Qt::Widget
 
 		h, w = self.size().height(), self.size().width()
 
+		nodeSize = 10
+
+		# Paint friends links
+
 		painter.setPen Qt::Color::new 100, 100, 255
 
-		@darknet.links.each do |link|
- 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[0]].pos.y*(h*0.95)+h*0.025, @darknet.nodes[link[1]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[1]].pos.y*(h*0.95)+h*0.025
+		@darknet.nodes.each do |node|
+			node.friends.each do |friend|
+ 				painter.drawLine node.x*w, node.y*h, friend.x*w, friend.y*h
+ 			end
  		end
 
- 		pen = Qt::Pen.new
+ 		# Paint random route
+
+ 
+		pen = Qt::Pen.new
  		pen.setColor Qt::Color::new 0, 255, 0
  		pen.setWidth 4
  		painter.setPen pen 
 
 		@darknet.randomRoute.each do |link|
- 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[0]].pos.y*(h*0.95)+h*0.025, @darknet.nodes[link[1]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[1]].pos.y*(h*0.95)+h*0.025
+ 			painter.drawLine link[0].x*w, link[0].y*h, link[1].x*w, link[1].y*h
  		end
+
+ 		# Paint greedy route
 
  		pen = Qt::Pen.new
  		pen.setColor Qt::Color::new 255, 0, 0
@@ -371,15 +363,18 @@ class NetworkWidget < Qt::Widget
  		painter.setPen pen 
 
 		@darknet.greedyRoute.each do |link|
- 			painter.drawLine @darknet.nodes[link[0]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[0]].pos.y*(h*0.95)+h*0.025, @darknet.nodes[link[1]].pos.x*(w*0.95)+w*0.025, @darknet.nodes[link[1]].pos.y*(h*0.95)+h*0.025
+ 			painter.drawLine link[0].x*w, link[0].y*h, link[1].x*w, link[1].y*h
  		end
+
+ 		# Paint nodes
 
 		painter.setPen Qt::Color::new 255, 255, 255
 		painter.setBrush Qt::Brush.new Qt::Color::new 255, 100, 100
 
 		@darknet.nodes.each do |node|
-			 painter.drawEllipse  node.pos.x*(w*0.95)-5+w*0.025, node.pos.y*(h*0.95)-5+h*0.025, 10, 10
+			 painter.drawEllipse  node.x*w-nodeSize/2, node.y*h-nodeSize/2, nodeSize, nodeSize
 		end
+
 
         painter.end
     end
