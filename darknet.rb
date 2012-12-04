@@ -294,12 +294,12 @@ class MainWindow < Qt::Widget
 
     def changeNearbyFriendFactor r
     	@darknet.changeNearbyFriendFactor r
-    	self.repaint
+    	self.update
     end
 
     def changeNbFriends n
     	@darknet.changeNbFriends n
-    	self.repaint
+    	self.update
     end
 
     def keyPressEvent e
@@ -307,29 +307,29 @@ class MainWindow < Qt::Widget
 
 	    	when Qt::Key_N
 	    		@darknet.addNode
-	    		self.repaint
+	    		self.update
 
 		    when Qt::Key_Escape
 		    	$qApp.quit
 
 		    when Qt::Key_F
 		    	@darknet.recomputeFriends
-		    	self.repaint
+		    	self.update
 
 		    when Qt::Key_P
 		    	@darknet.recomputePositions
-		    	self.repaint
+		    	self.update
 
 		    when Qt::Key_R
 		    	@darknet.computeRoutes
-		    	self.repaint
+		    	self.update
 
 		    when Qt::Key_D
 		    	@darknet = Darknet.new
 		    	@networkWidget.darknet = @darknet
 		    	@darknet.changeNearbyFriendFactor @spinBoxNFF.value
 		    	@darknet.changeNbFriends @spinBoxNF.value
-		    	self.repaint 
+		    	self.update 
 
 	    end
     end
