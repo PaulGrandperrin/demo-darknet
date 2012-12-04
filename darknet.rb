@@ -81,15 +81,8 @@ class Node
 		@friends.push node
 	end
 
-	def removeFriend node
-		self.friends.delete node
-		node.friends.delete self
-	end
-
 	def removeAllFriends
-		@friends.each do |friend|
-			self.removeFriend friend
-		end
+		@friends= Array.new
 	end
 
 	# Returns the route to dest without passing through the excludedNodes. If it doesn't exist, returns nil
