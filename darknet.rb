@@ -51,7 +51,6 @@ class Node
 
 		nbFriends = [nodes.size - 1 - @friends.size, nbFriends].min
 		nodes = nodes - [self] - @friends
-		#nodes = Hash[nodes.map{}]
 
 		if nearbyFriendFactor == 0
 			nbFriends.times do
@@ -62,11 +61,9 @@ class Node
 				nodes.delete node
 			end
 		else
-			# TODO rework that to be more accurate
-			nodes = nodes.sort_by{|n| self.distance n}
-			
-			nbFriends.times do				
-				node = nodes[((1.0-(1.0-rand()**(nearbyFriendFactor*2.0))**(1.0/(nearbyFriendFactor*2.0)))*nodes.size).floor]
+			nbFriends.times do
+				dist = (1.0-(1.0-rand()**(nearbyFriendFactor*2.0))**(1.0/(nearbyFriendFactor*2.0))) * Math.sqrt(2)
+				node = nodes.min_by{|node| (self.distance(node) - dist).abs}
 
 				self.addFriend node
 				node.addFriend self
@@ -178,6 +175,16 @@ class Darknet
 		newNode.chooseSmallWorldFriends @nodes, [@nodes.size-1, @nbFriends].min, @nearbyFriendFactor
 
 		cleanNetwork
+
+		if @nodes.size == 2
+			@firstNode = @nodes[0]
+			@lastNode = @nodes[1]
+		elsif @nodes.size > 2
+			@greedyRoute = @firstNode.greedyRoute @lastNode
+			@randomRoute = @firstNode.randomRoute @lastNode	
+		end
+
+		
 	end # def addNode
 
 	def recomputeFriends
@@ -193,11 +200,21 @@ class Darknet
 		end
 
 		cleanNetwork
+
+		if @nodes.size > 2
+			@greedyRoute = @firstNode.greedyRoute @lastNode
+			@randomRoute = @firstNode.randomRoute @lastNode	
+		end
 	end
 
 	def recomputePositions
 		@nodes.each do |node|
 			node.x, node.y = rand, rand
+		end
+
+		if @nodes.size > 2
+			@greedyRoute = @firstNode.greedyRoute @lastNode
+			@randomRoute = @firstNode.randomRoute @lastNode	
 		end
 	end
 
@@ -222,8 +239,8 @@ class Darknet
 		@firstNode = @nodes.choice
 		@lastNode = @nodes.choice
 
-		@greedyRoute = firstNode.greedyRoute lastNode
-		@randomRoute = firstNode.randomRoute lastNode
+		@greedyRoute = @firstNode.greedyRoute @lastNode
+		@randomRoute = @firstNode.randomRoute @lastNode
 	end
 
 end
