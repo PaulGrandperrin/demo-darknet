@@ -51,6 +51,7 @@ class Node
 
 		nbFriends = [nodes.size - 1 - @friends.size, nbFriends].min
 		nodes = nodes - [self] - @friends
+		#nodes = Hash[nodes.map{}]
 
 		if nearbyFriendFactor == 0
 			nbFriends.times do
@@ -93,18 +94,18 @@ class Node
 		# get friends ordered by proximity with destination
 		bestFriends = (@friends - excludedNodes - [self]).sort_by{|n| dest.distance n}
 		
-		route = nil
+		route = []
 		friend = nil
 
-		while route.nil? and not bestFriends.empty?
+		while route.empty? and not bestFriends.empty?
 			friend = bestFriends.shift
 			route = friend.greedyRoute dest, excludedNodes.push(self)
 		end
 
-		if route
+		if not route.empty?
 			return route.push [self, friend]
 		else
-			return nil
+			return []
 		end
 	end
 
@@ -117,18 +118,18 @@ class Node
 		# get friends ordered randomly
 		bestFriends = (@friends - excludedNodes - [self]).shuffle
 		
-		route = nil
+		route = []
 		friend = nil
 
-		while route.nil? and not bestFriends.empty?
+		while route.empty? and not bestFriends.empty?
 			friend = bestFriends.shift
 			route = friend.randomRoute dest, excludedNodes.push(self)
 		end
 
-		if route
+		if not route.empty?
 			return route.push([self, friend])
 		else
-			return nil
+			return []
 		end
 		
 	end
@@ -137,7 +138,7 @@ end
 
 class Darknet
 
-	attr_reader :nodes, :randomRoute, :greedyRoute, :nearbyFriendFactor, :nbFriends
+	attr_reader :nodes, :randomRoute, :greedyRoute, :firstNode, :lastNode, :nearbyFriendFactor, :nbFriends
 
 	def initialize
 
@@ -147,6 +148,7 @@ class Darknet
 		# The last routes that have been computed
 		@greedyRoute = Array.new
 		@randomRoute = Array.new
+		@firstNode, @lastNode = nil, nil
 
 		# The nearby friend factor determine how nodes choose their friends.
 		# The bigger the factor is, the more the proximity will be an important factor.
@@ -217,11 +219,11 @@ class Darknet
 			return
 		end
 
-		nodeA = @nodes.choice
-		nodeB = @nodes.choice
+		@firstNode = @nodes.choice
+		@lastNode = @nodes.choice
 
-		@greedyRoute = nodeA.greedyRoute nodeB
-		@randomRoute = nodeA.randomRoute nodeB
+		@greedyRoute = firstNode.greedyRoute lastNode
+		@randomRoute = firstNode.randomRoute lastNode
 	end
 
 end
@@ -374,18 +376,16 @@ class NetworkWidget < Qt::Widget
 		end
 
 		# Paint first and last node of the routes
-		if not @darknet.greedyRoute.empty?
+		if @darknet.firstNode and @darknet.lastNode
 			painter.setPen Qt::Color::new 255, 255, 255
 			painter.setBrush Qt::Brush.new Qt::Color::new 0, 255, 0
 
-			node = @darknet.greedyRoute.last[0]
-			painter.drawEllipse  node.x*w-nodeSize, node.y*h-nodeSize, nodeSize*2, nodeSize*2
+			painter.drawEllipse @darknet.firstNode.x*w-nodeSize, @darknet.firstNode.y*h-nodeSize, nodeSize*2, nodeSize*2
 
 			painter.setPen Qt::Color::new 255, 255, 255
 			painter.setBrush Qt::Brush.new Qt::Color::new 255, 0, 0
 
-			node = @darknet.greedyRoute.first[1]
-			painter.drawEllipse  node.x*w-nodeSize, node.y*h-nodeSize, nodeSize*2, nodeSize*2		
+			painter.drawEllipse @darknet.lastNode.x*w-nodeSize, @darknet.lastNode.y*h-nodeSize, nodeSize*2, nodeSize*2		
 		end
 
         painter.end
