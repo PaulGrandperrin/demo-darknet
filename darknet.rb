@@ -138,7 +138,7 @@ end
 
 class Darknet
 
-	attr_reader :nodes, :randomRoute, :greedyRoute, :firstNode, :lastNode, :nearbyFriendFactor, :nbFriends
+	attr_reader :nodes, :randomRoute, :greedyRoute, :firstNode, :lastNode, :nearbyFriendFactor, :nbFriends, :stats
 
 	def initialize
 
@@ -162,6 +162,10 @@ class Darknet
 
 		# The number of friends of each nodes
 		@nbFriends = 5
+
+		# Number of values per bar
+		@nbValuesPerBar = 10
+		@stats = Array.new
 
 	end # def initialize
 
@@ -246,6 +250,18 @@ class Darknet
 		@greedyRoute = @firstNode.greedyRoute(@lastNode){}
 	end
 
+	def computeStats
+		distances = @nodes.map{|node| node.friends.map{|friend| [node,friend]}}.flatten(1).select{|route| route[0].id < route[1].id}.map{|route| route[0].distance route[1]}
+
+		@stats = Array.new
+		nbBars = (distances.size / @nbValuesPerBar).to_i
+		nbBars.times do |barNumber|
+			range = Math.sqrt(2) / nbBars * barNumber, Math.sqrt(2) / nbBars * (barNumber + 1)
+
+			@stats[barNumber] = distances.count{|distance| distance > range[0] and distance < range[1]}
+		end
+
+	end
 end
 
 class MainWindow < Qt::Widget
@@ -275,30 +291,42 @@ class MainWindow < Qt::Widget
         @networkWidget = NetworkWidget.new
         @networkWidget.darknet = @darknet
 
-        menu = Qt::Widget.new
+        @stats = StatsWidget.new
+		@stats.darknet = @darknet        
+
+        @menu = Qt::Widget.new
         menuL = Qt::FormLayout.new
 		menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFF
         menuL.addRow Qt::Label.new("Number of friends"), @spinBoxNF
-        menu.setLayout menuL
+        @menu.setLayout menuL
+
+        @graphics = Qt::Widget.new
+        graphicsL = Qt::HBoxLayout.new
+        graphicsL.addWidget @networkWidget
+        graphicsL.addWidget @stats
+        @graphics.setLayout graphicsL
 
         layout = Qt::VBoxLayout.new
-        layout.addWidget menu
-        layout.addWidget @networkWidget
+        layout.addWidget @menu
+        layout.addWidget @graphics
         setLayout layout
 
         @networkWidget.setFocusPolicy Qt::StrongFocus
-        menu.setFixedHeight 60
+        @menu.setFixedHeight 60
+        @stats.setFixedWidth 150
 
         show
     end
 
     def changeNearbyFriendFactor r
     	@darknet.changeNearbyFriendFactor r
+    	@darknet.computeStats
     	self.update
     end
 
     def changeNbFriends n
     	@darknet.changeNbFriends n
+    	@darknet.computeStats
     	self.update
     end
 
@@ -307,6 +335,7 @@ class MainWindow < Qt::Widget
 
 	    	when Qt::Key_N
 	    		@darknet.addNode
+	    		@darknet.computeStats
 	    		self.update
 
 		    when Qt::Key_Escape
@@ -314,10 +343,12 @@ class MainWindow < Qt::Widget
 
 		    when Qt::Key_F
 		    	@darknet.recomputeFriends
+		    	@darknet.computeStats
 		    	self.update
 
 		    when Qt::Key_P
 		    	@darknet.recomputePositions
+		    	@darknet.computeStats
 		    	self.update
 
 		    when Qt::Key_R
@@ -327,9 +358,11 @@ class MainWindow < Qt::Widget
 		    when Qt::Key_D
 		    	@darknet = Darknet.new
 		    	@networkWidget.darknet = @darknet
+		    	@stats.darknet = @darknet
 		    	@darknet.changeNearbyFriendFactor @spinBoxNFF.value
 		    	@darknet.changeNbFriends @spinBoxNF.value
-		    	self.update 
+		    	@darknet.computeStats
+		    	self.update
 
 	    end
     end
@@ -411,6 +444,40 @@ class NetworkWidget < Qt::Widget
         painter.end
     end
 
+end
+
+class StatsWidget < Qt::Widget
+	
+	attr_accessor :darknet
+
+	def initialize
+		super
+	end
+
+	def paintEvent event
+
+		if @darknet.stats.empty?
+			return
+		end
+
+		painter = Qt::Painter.new self
+
+		h, w = self.size().height(), self.size().width()
+
+
+		max = @darknet.stats.max
+
+		nbBars = darknet.stats.size
+		nbBars.times do |barNumber|
+			greyShade = (50 + 150.to_f / nbBars * barNumber).to_i
+			painter.setPen Qt::Color::new greyShade, greyShade, greyShade
+			painter.setBrush Qt::Brush.new Qt::Color::new greyShade, greyShade, greyShade
+			painter.drawRect 0,h.to_f/nbBars*barNumber,@darknet.stats[barNumber].to_f / max * w, h.to_f/nbBars
+		end
+
+		painter.end
+
+	end
 end
 
 
