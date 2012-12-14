@@ -16,11 +16,17 @@
 
 
 # TODO List
-# Improve GUI
-# Implement Swapping algorithm
 # Implement Object Search alhorithm
 # Make it all work together
-
+# Threading/Socket	Romain
+# File management
+#	-HTL 			Paul
+# 	-lookup
+#   -insertion
+#   -cache management
+# Cryptage			Romain
+#   -file
+#   -connections
 
 require 'Qt'
 
@@ -133,6 +139,35 @@ class Node
 		end
 		
 	end
+
+	def swap n
+		temp = @x
+		@x = n.x
+		n.x = temp
+		
+		temp = @y
+		@y = n.y
+		n.y = temp
+	end
+	
+	def logSum n
+		sum = 0.0
+		@friends.each do |friend|
+			if friend.x == n.x and friend.y == n.y # if the node n is one of our friend
+				sum += Math.log((n.x - @x).abs + (n.y - @y).abs)
+			else
+				sum += Math.log((n.x - friend.x).abs + (n.y - friend.y).abs)
+			end
+		end
+		return sum
+	end
+
+	def unlink
+		@friends.each do |friend|
+			friend.friends.delete self
+		end
+	end
+
 end
 
 
@@ -237,6 +272,16 @@ class Darknet
 		recomputeFriends
 	end # def changeNbFriends
 
+	def changeNbNode n
+		if n > @nodes.size
+			(n - @nodes.size).times do
+				self.addNode
+			end
+		elsif n < @nodes.size
+			@nodes.pop(@nodes.size - n).each{|node| node.unlink}
+		end
+	end # def changeNbFriends
+
 
 	def computeRoutes
 		if @nodes.size < 2
@@ -262,13 +307,39 @@ class Darknet
 		end
 
 	end
+
+	def swapRandomNodes
+		100.times do
+			@nodes.each do |nodeA|
+				nodeB = @nodes.choice
+				prob = Math.exp(-2 * (nodeA.logSum(nodeB) + nodeB.logSum(nodeA) - nodeA.logSum(nodeA) - nodeB.logSum(nodeB)))
+
+				if rand < prob
+				 	nodeA.swap(nodeB)
+				end
+			end
+		end
+
+		if @nodes.size > 2
+			@greedyRoute = @firstNode.greedyRoute(@lastNode){}
+			@randomRoute = @firstNode.randomRoute(@lastNode){}
+		end
+	end
 end
 
 class MainWindow < Qt::Widget
 
  	signals 'valueChanged(int)'
+ 	signals :clicked
   	slots 'changeNearbyFriendFactor(int)'
   	slots 'changeNbFriends(int)'
+  	slots 'changeNbNode(int)'
+  	slots :recomputeFriendLinks
+  	slots :randomizePositions
+  	slots :randomRoute
+  	slots :swap
+  	slots :reset
+
 
     def initialize
         super
@@ -288,31 +359,53 @@ class MainWindow < Qt::Widget
         @spinBoxNF.setValue @darknet.nbFriends
         connect(@spinBoxNF, SIGNAL('valueChanged(int)'), self, SLOT('changeNbFriends(int)'))
 
-        @networkWidget = NetworkWidget.new
-        @networkWidget.darknet = @darknet
+        @spinBoxNN = Qt::SpinBox.new
+        @spinBoxNN.setMinimum 0
+        @spinBoxNN.setMaximum 999
+        @spinBoxNN.setValue @darknet.nodes.size
+        connect(@spinBoxNN, SIGNAL('valueChanged(int)'), self, SLOT('changeNbNode(int)'))
 
-        @stats = StatsWidget.new
-		@stats.darknet = @darknet        
+        @recomputeFriendLinks = Qt::PushButton.new "Recompute friend links"
+        @recomputeFriendLinks.connect(:clicked, self, :recomputeFriendLinks)
+
+        @randomizePositions = Qt::PushButton.new "Randomize nodes positions"
+        @randomizePositions.connect(:clicked, self, :randomizePositions)
+
+        @randomRoute = Qt::PushButton.new "Draw a random route"
+		@randomRoute.connect(:clicked, self, :randomRoute)
+
+        @swap = Qt::PushButton.new "Swapping algorithm * 100"
+        @swap.connect(:clicked, self, :swap)
+
+        @reset = Qt::PushButton.new "Reset"
+        @reset.connect(:clicked, self, :reset)
 
         @menu = Qt::Widget.new
         menuL = Qt::FormLayout.new
 		menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFF
         menuL.addRow Qt::Label.new("Number of friends"), @spinBoxNF
+        menuL.addRow Qt::Label.new("Number of nodes"), @spinBoxNN
+        menuL.addRow @recomputeFriendLinks
+        menuL.addRow @randomizePositions
+        menuL.addRow @randomRoute
+        menuL.addRow @swap
+        menuL.addRow @reset
         @menu.setLayout menuL
 
-        @graphics = Qt::Widget.new
-        graphicsL = Qt::HBoxLayout.new
-        graphicsL.addWidget @networkWidget
-        graphicsL.addWidget @stats
-        @graphics.setLayout graphicsL
+        @networkWidget = NetworkWidget.new
+        @networkWidget.darknet = @darknet
 
-        layout = Qt::VBoxLayout.new
+        @stats = StatsWidget.new
+		@stats.darknet = @darknet
+
+        layout = Qt::HBoxLayout.new
         layout.addWidget @menu
-        layout.addWidget @graphics
+        layout.addWidget @networkWidget
+        layout.addWidget @stats
         setLayout layout
 
         @networkWidget.setFocusPolicy Qt::StrongFocus
-        @menu.setFixedHeight 60
+        @menu.setFixedWidth 200
         @stats.setFixedWidth 150
 
         show
@@ -330,39 +423,69 @@ class MainWindow < Qt::Widget
     	self.update
     end
 
+    def changeNbNode n
+    	@darknet.changeNbNode n
+    	@darknet.computeStats
+    	self.update
+    end
+
+    def recomputeFriendLinks
+    	@darknet.recomputeFriends
+		self.update
+    end
+
+    def randomizePositions
+    	@darknet.recomputePositions
+    	@darknet.computeStats
+    	self.update
+    end
+
+    def randomRoute
+    	@darknet.computeRoutes
+		self.update
+    end
+
+    def swap
+    	@darknet.swapRandomNodes
+		@darknet.computeStats
+    	self.update	
+    end
+
+    def reset
+    	@darknet = Darknet.new
+    	@networkWidget.darknet = @darknet
+    	@stats.darknet = @darknet
+    	@darknet.changeNearbyFriendFactor @spinBoxNFF.value
+    	@darknet.changeNbFriends @spinBoxNF.value
+    	@darknet.computeStats
+    	self.update
+    end
+
     def keyPressEvent e
     	case e.key
+
+		    when Qt::Key_Escape
+		    	$qApp.quit
 
 	    	when Qt::Key_N
 	    		@darknet.addNode
 	    		@darknet.computeStats
 	    		self.update
 
-		    when Qt::Key_Escape
-		    	$qApp.quit
-
 		    when Qt::Key_F
-		    	@darknet.recomputeFriends
-		    	@darknet.computeStats
-		    	self.update
+		    	recomputeFriendLinks
 
 		    when Qt::Key_P
-		    	@darknet.recomputePositions
-		    	@darknet.computeStats
-		    	self.update
+		    	randomizePositions
 
 		    when Qt::Key_R
 		    	@darknet.computeRoutes
-		    	self.update
 
 		    when Qt::Key_D
-		    	@darknet = Darknet.new
-		    	@networkWidget.darknet = @darknet
-		    	@stats.darknet = @darknet
-		    	@darknet.changeNearbyFriendFactor @spinBoxNFF.value
-		    	@darknet.changeNbFriends @spinBoxNF.value
-		    	@darknet.computeStats
-		    	self.update
+		    	reset
+
+		    when Qt::Key_S
+				swap	
 
 	    end
     end
