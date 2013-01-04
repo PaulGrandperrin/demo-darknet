@@ -102,7 +102,6 @@ class Node
 	    @nbFiles = 2
 		@HtlFile = 2
 		@queryId = 1
-		
 		@id = id
 
 		if position.nil?
@@ -558,14 +557,12 @@ class Darknet
 	end
 
 	def swapRandomNodes
-		100.times do
-			@nodes.each do |nodeA|
-				nodeB = @nodes.choice
-				prob = Math.exp(-2 * (nodeA.logSum(nodeB) + nodeB.logSum(nodeA) - nodeA.logSum(nodeA) - nodeB.logSum(nodeB)))
+		(100*@nodes.size).times do
+			nodeA, nodeB = @nodes.choice, @nodes.choice
+			prob = Math.exp(-2 * (nodeA.logSum(nodeB) + nodeB.logSum(nodeA) - nodeA.logSum(nodeA) - nodeB.logSum(nodeB)))
 
-				if rand < prob
-				 	nodeA.swap(nodeB)
-				end
+			if rand < prob
+			 	nodeA.swap(nodeB)
 			end
 		end
 
@@ -620,10 +617,10 @@ class MainWindow < Qt::Widget
         @randomizePositions = Qt::PushButton.new "Randomize nodes positions"
         @randomizePositions.connect(:clicked, self, :randomizePositions)
 
-        @randomRoute = Qt::PushButton.new "Draw a random route"
+        @randomRoute = Qt::PushButton.new "Compute routes"
 		@randomRoute.connect(:clicked, self, :randomRoute)
 
-        @swap = Qt::PushButton.new "Swapping algorithm * 100"
+        @swap = Qt::PushButton.new "Swapping algorithm (100 times)"
         @swap.connect(:clicked, self, :swap)
 
         @reset = Qt::PushButton.new "Reset"
@@ -873,6 +870,7 @@ class NetworkWidget < Qt::Widget
 end # class NetworkWidget
 
 class StatsWidget < Qt::Widget
+	
 	
 	attr_accessor :darknet
 
