@@ -31,7 +31,6 @@
 
 require 'Qt'
 
-
 # A class that represents the hash of a file
 class HashFile
 
@@ -46,13 +45,12 @@ class HashFile
 	def distance a
 		return Math.sqrt((self.x-a.x)**2 + (self.y-a.y)**2)
 	end
-end
-
+end #class HashFile
 
 class File
 
-       attr_reader :id, :contents
-       attr_accessor :x, :y
+   attr_reader :id, :contents
+   attr_accessor :x, :y
 
 	def initialize id, position = nil
 		@id = id
@@ -63,15 +61,12 @@ class File
 		else
 			@x, @y = position
 		end
-
 	end 
 	
-		
 	def getHash
 		return HashFile.new(@x, @y)
 	end	
-	
-	
+
 	# has the same id
 	def equal id
 		if id == @id
@@ -90,13 +85,11 @@ class File
 		end
 	end
 	
-	
 	# Euclidean distance
 	def distance a
 		return Math.sqrt((self.x-a.x)**2 + (self.y-a.y)**2)
 	end
-
-end
+end #class File
 
 
 class Node
@@ -104,11 +97,9 @@ class Node
 	attr_reader :id, :friends, :files, :nbFiles, :HtlFile, :queryId, :queryCache
 	attr_accessor :x, :y
 
-
 	def initialize id, position = nil
-	
 		# Constants
-	        @nbFiles = 2
+	    @nbFiles = 2
 		@HtlFile = 2
 		@queryId = 1
 		
@@ -123,19 +114,17 @@ class Node
 		@friends = Array.new
 		@queryCache = Hash.new
 		
-                # By default, each Node contains some files 
-                @files = Array.new
-                
-                @nbFiles.times do |j|
-                       idFile = 1000 + @id*100 + j + 1
-                       newFile = File.new idFile
-                       @files.push newFile
-                end
-
+        # By default, each Node contains some files 
+        @files = Array.new
+        
+        @nbFiles.times do |j|
+           idFile = 1000 + @id*100 + j + 1
+           newFile = File.new idFile
+           @files.push newFile
+        end
 	end
 
-
-        # Friends Block
+    # Friends Block
 	def addFriend node
 		@friends.push node
 	end
@@ -143,18 +132,14 @@ class Node
 	def removeAllFriends
 		@friends= Array.new
 	end
-	
-	
+		
 	def unlink
 		@friends.each do |friend|
 			friend.friends.delete self
 		end
 	end
-        # ---------------------------
 
-
-
-        # Files Block
+    # Files Block
 	def addFile file
 		@files.push file
 	end
@@ -172,9 +157,7 @@ class Node
 				file = f
 			end
 		end
-		
 		return file
-		
 	end
 	
 	# Look for a file by its hash
@@ -186,22 +169,15 @@ class Node
 				file = f
 			end
 		end
-		
 		return file
-		
 	end
-	
-       # ---------------------------
 
-
-       # Query Block       
-       def getQueryId
-       		id = @queryId
-       		@queryId += 1
-       		return id
-       end
-       # ---------------------------
-       
+	# Query Block       
+	def getQueryId
+		id = @queryId
+		@queryId += 1
+		return id
+	end     
        
 	def chooseSmallWorldFriends nodes, nbFriends, nearbyFriendFactor
 
@@ -226,9 +202,7 @@ class Node
 				nodes.delete node
 			end
 		end
-
 	end
-
 
 	# Returns the route to dest without passing through the excludedNodes. If it doesn't exist, returns nil
 	def greedyRoute dest, excludedNodes = []
@@ -254,7 +228,6 @@ class Node
 		else
 			return []
 		end
-
 	end
 
 	def randomRoute dest, excludedNodes = []
@@ -280,10 +253,7 @@ class Node
 		else
 			return []
 		end
-		
 	end
-
-
 
 	# start a query to search a file, and add it if does exist
 	def searchFileInit hash
@@ -296,7 +266,6 @@ class Node
 			queryId = self.getQueryId
 			bestFriends = (@friends - [self]).sort_by{|n| hash.distance n}
 			@queryCache[queryId] = self
-			
 			
 			friend = nil
 			while file.nil? and not bestFriends.empty?
@@ -313,9 +282,7 @@ class Node
 				return nil
 			end
 		end 
-							
 	end
-	
 	
  	# Search the file. If it doesn't exist, returns nil
 	def searchFile hash, qId, excludedNodes = []
@@ -331,7 +298,6 @@ class Node
 
 		# get friends ordered by proximity with destination
 		bestFriends = (@friends - excludedNodes - [self]).sort_by{|n| hash.distance n}
-		
 
 		friend = nil
 		while file.nil? and not bestFriends.empty?
@@ -344,33 +310,29 @@ class Node
 		if not file.nil? and htl > 0
 			self.addFile file
 			return file, htl-1
-	
 		else
 			return file, 0
 		end
-
 	end
-
         
-        # insert a file in the network
-        def insertFile file,  excludedNodes = [], htl = @HtlFile 
-        	    	      	       	
+    # insert a file in the network
+    def insertFile file,  excludedNodes = [], htl = @HtlFile 	
+
 		bestFriends = (@friends - excludedNodes - [self]).sort_by{|n| file.distance n}
 		friend = bestFriends.shift
 		if friend.nil?
 			return false
 		end
 						
-        	if htl != @HtlFile
-        		# if the exists already, cancel the insert of the file
-	        	if @files.include? file
-        			return false
-        		end
-        	
+		if htl != @HtlFile
+			# if the exists already, cancel the insert of the file
+	    	if @files.include? file
+				return false
+			end
+	    	
 			if htl == 0
 				return true
 			end
-			
 
 			if friend.insertFile(file, excludedNodes.push(self), htl-1)
 				friend.addFile file
@@ -378,23 +340,21 @@ class Node
 			else
 				return false
 			end
-		
+
 		else # the initiater of the query
 			friend.insertFile(file, excludedNodes.push(self), htl-1)
-        	end 
-        	        	
-        end
-        
-        # Insert all files in the network
-        def insertAllFiles
-        	@files.each do |file|
-        		insertFile file
-        	end
-        end
-        
+	    end         	
+    end
+    
+    # Insert all files in the network
+    def insertAllFiles
+    	@files.each do |file|
+    		insertFile file
+    	end
+    end
 	
-        # Utility functions
-        #1- Swap
+    # Utility functions
+    #1- Swap
 	def swap n
 		temp = @x
 		@x = n.x
@@ -405,8 +365,7 @@ class Node
 		n.y = temp
 	end
 	
-
-        #2- This is our secret formulas ;)
+    #2- This is our secret formulas ;)
 	def logSum n
 		sum = 0.0
 		@friends.each do |friend|
@@ -419,14 +378,11 @@ class Node
 		return sum
 	end
 	
-	
 	#3- Euclidean distance
 	def distance a
 		return Math.sqrt((self.x-a.x)**2 + (self.y-a.y)**2)
 	end
-
-end
-
+end #class Node
 
 class Darknet
 
@@ -434,7 +390,6 @@ class Darknet
 	attr_reader :nodeInit, :hash, :fileRoute
 
 	def initialize
-
 		# The list of nodes
 		@nodes = Array.new
 
@@ -460,11 +415,8 @@ class Darknet
 		# Number of values per bar
 		@nbValuesPerBar = 10
 		@stats = Array.new
-		
-
 	end # def initialize
-	
-	# -----------------Search Files------------------------------
+
 	# Insert all the files of all the nodes	
 	def insertAllFiles
 		@nodes.each do |n| n.insertAllFiles end
@@ -494,8 +446,6 @@ class Darknet
 			@fileRoute = @nodeInit.searchFileInit @hash
 		end
 	end
-	# -----------------------------------------------------------
-	
 	
 	# Remove friends from nodes with too many friends without leaving nodes with too few friends
 	def cleanNetwork
@@ -517,8 +467,6 @@ class Darknet
 			@greedyRoute = @firstNode.greedyRoute(@lastNode){}
 			@randomRoute = @firstNode.randomRoute(@lastNode){}
 		end
-
-		
 	end # def addNode
 
 	def recomputeFriends
@@ -552,7 +500,6 @@ class Darknet
 		end
 	end
 
-
 	def changeNearbyFriendFactor r
 		@nearbyFriendFactor = r
 		recomputeFriends
@@ -564,10 +511,7 @@ class Darknet
 		recomputeFriends
 	end # def changeNbFriends
 
-
-
 	def changeNbNode n
-			
 		if n > @nodes.size
 			(n - @nodes.size).times do
 				self.addNode
@@ -577,7 +521,6 @@ class Darknet
 				insertAllFiles
 			end
 
-			
 		elsif n < @nodes.size
 			@nodes.pop(@nodes.size - n).each{|node| node.unlink}
 			
@@ -589,7 +532,6 @@ class Darknet
 			
 		end
 	end # def changeNbFriends
-
 
 	def computeRoutes
 		if @nodes.size < 2
@@ -610,7 +552,6 @@ class Darknet
 		nbBars = (distances.size / @nbValuesPerBar).to_i
 		nbBars.times do |barNumber|
 			range = Math.sqrt(2) / nbBars * barNumber, Math.sqrt(2) / nbBars * (barNumber + 1)
-
 			@stats[barNumber] = distances.count{|distance| distance > range[0] and distance < range[1]}
 		end
 
@@ -633,7 +574,7 @@ class Darknet
 			@randomRoute = @firstNode.randomRoute(@lastNode){}
 		end
 	end
-end
+end #class Darknet
 
 class MainWindow < Qt::Widget
 
@@ -650,10 +591,8 @@ class MainWindow < Qt::Widget
   	slots 'changeNodeInit(QString)'
   	slots 'changeFile(QString)'
 
-
     def initialize
         super
-
         @darknet = Darknet.new
 
         resize 1024, 640
@@ -664,7 +603,7 @@ class MainWindow < Qt::Widget
         @spinBoxNFF.setValue @darknet.nearbyFriendFactor
         connect(@spinBoxNFF, SIGNAL('valueChanged(int)'), self, SLOT('changeNearbyFriendFactor(int)'))
 
-	@spinBoxNF = Qt::SpinBox.new
+		@spinBoxNF = Qt::SpinBox.new
         @spinBoxNF.setMinimum 0
         @spinBoxNF.setValue @darknet.nbFriends
         connect(@spinBoxNF, SIGNAL('valueChanged(int)'), self, SLOT('changeNbFriends(int)'))
@@ -695,12 +634,10 @@ class MainWindow < Qt::Widget
 
         @comboFile = Qt::ComboBox.new self
         connect @comboFile, SIGNAL("activated(QString)"), self, SLOT("changeFile(QString)")
-        
-        
 
         @menu = Qt::Widget.new
         menuL = Qt::FormLayout.new
-	menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFF
+		menuL.addRow Qt::Label.new("Nearby Friend Factor"), @spinBoxNFF
         menuL.addRow Qt::Label.new("Number of friends"), @spinBoxNF
         menuL.addRow Qt::Label.new("Number of nodes"), @spinBoxNN
         menuL.addRow Qt::Label.new("The Node"), @comboNode
@@ -710,15 +647,13 @@ class MainWindow < Qt::Widget
         menuL.addRow @randomRoute
         menuL.addRow @swap
         menuL.addRow @reset
-
-
         @menu.setLayout menuL
 
         @networkWidget = NetworkWidget.new
         @networkWidget.darknet = @darknet
 
         @stats = StatsWidget.new
-	@stats.darknet = @darknet
+		@stats.darknet = @darknet
 
         layout = Qt::HBoxLayout.new
         layout.addWidget @menu
@@ -770,7 +705,7 @@ class MainWindow < Qt::Widget
     
     def recomputeFriendLinks
     	@darknet.recomputeFriends
-	self.update
+		self.update
     end
 
     def randomizePositions
@@ -781,12 +716,12 @@ class MainWindow < Qt::Widget
 
     def randomRoute
     	@darknet.computeRoutes
-	self.update
+		self.update
     end
 
     def swap
     	@darknet.swapRandomNodes
-	@darknet.computeStats
+		@darknet.computeStats
     	self.update	
     end
 
@@ -801,7 +736,6 @@ class MainWindow < Qt::Widget
     	@darknet.computeStats
     	self.update
     end
-	
 	
     def fillComboNode
     	@darknet.nodes.each do |n|
@@ -818,48 +752,37 @@ class MainWindow < Qt::Widget
 	    			@comboFile.addItem f.id.to_s
     			end
     		end 
-	end
-	
-	if @darknet.nodeInit
-		changeFile @darknet.nodeInit.files[0].id.to_s
-	end
-	
+		end
     end
-    
     
     def keyPressEvent e
     	case e.key
-
 	        when Qt::Key_Escape
-		    $qApp.quit
+		    	$qApp.quit
 
 	    	when Qt::Key_N
-                    @darknet.addNode
+	            @darknet.addNode
 	    	    @darknet.computeStats
 	    	    self.update
 
-		when Qt::Key_F
-		    recomputeFriendLinks
+			when Qt::Key_F
+				recomputeFriendLinks
 
-                when Qt::Key_P
-		    randomizePositions
+            when Qt::Key_P
+				randomizePositions
 
-		when Qt::Key_R
-		    @darknet.computeRoutes
+			when Qt::Key_R
+				@darknet.computeRoutes
 
 	        when Qt::Key_D
-		    reset
+				reset
 
 	        when Qt::Key_S
-		    swap	
-	end
-
+				swap	
+		end
     end
-
-
 end # class MainWindow
  
-
 class NetworkWidget < Qt::Widget
 	
 	attr_accessor :darknet
@@ -869,25 +792,19 @@ class NetworkWidget < Qt::Widget
 	end
 
 	def paintEvent event
-
-                painter = Qt::Painter.new self
-                painter.setRenderHint Qt::Painter::Antialiasing
-
+        painter = Qt::Painter.new self
+        painter.setRenderHint Qt::Painter::Antialiasing
 		h, w = self.size().height(), self.size().width()
 
 		nodeSize = 10
-
-
-
 
  		# Paint nodes
 		painter.setPen Qt::Color::new 255, 255, 255
 		painter.setBrush Qt::Brush.new Qt::Color::new 255, 100, 100
 
 		@darknet.nodes.each do |node|
-			 painter.drawEllipse  node.x*w-nodeSize/2, node.y*h-nodeSize/2, nodeSize, nodeSize
+			painter.drawEllipse  node.x*w-nodeSize/2, node.y*h-nodeSize/2, nodeSize, nodeSize
 		end
-
 
 		# Paint first and last node of the routes
 		if @darknet.firstNode and @darknet.lastNode
@@ -900,10 +817,7 @@ class NetworkWidget < Qt::Widget
 			painter.setBrush Qt::Brush.new Qt::Color::new 200, 0, 0
 
 			painter.drawEllipse @darknet.lastNode.x*w-nodeSize, @darknet.lastNode.y*h-nodeSize, nodeSize*2, nodeSize*2
-			
-			
 		end
-		
 		
 		# Paint the node that looks for a file
 		if @darknet.nodeInit
@@ -913,7 +827,6 @@ class NetworkWidget < Qt::Widget
 			painter.drawEllipse @darknet.nodeInit.x*w-nodeSize, @darknet.nodeInit.y*h-nodeSize, nodeSize*2, nodeSize*2				
 		end
 
-
 		# Paint friends links
 		painter.setPen Qt::Color::new 100, 100, 255
 
@@ -922,8 +835,6 @@ class NetworkWidget < Qt::Widget
  				painter.drawLine node.x*w, node.y*h, friend.x*w, friend.y*h
  			end
  		end
-
-
 
  		# Paint random route
 		pen = Qt::Pen.new
@@ -935,7 +846,6 @@ class NetworkWidget < Qt::Widget
  			painter.drawLine link[0].x*w, link[0].y*h, link[1].x*w, link[1].y*h
  		end
 
-
  		# Paint greedy route
  		pen = Qt::Pen.new
  		pen.setColor Qt::Color::new 255, 0, 0
@@ -945,7 +855,6 @@ class NetworkWidget < Qt::Widget
 		@darknet.greedyRoute.each do |link|
  			painter.drawLine link[0].x*w, link[0].y*h, link[1].x*w, link[1].y*h
  		end
- 		
  		
  		# Paint file route
  		if @darknet.fileRoute
@@ -958,17 +867,10 @@ class NetworkWidget < Qt::Widget
 	 			painter.drawLine link[0].x*w, link[0].y*h, link[1].x*w, link[1].y*h
 	 		end
  		end
- 		 
- 
-
-
         painter.end
 
     end # def paintEvent
-
-end # NetworkWidget
-
-
+end # class NetworkWidget
 
 class StatsWidget < Qt::Widget
 	
@@ -985,10 +887,7 @@ class StatsWidget < Qt::Widget
 		end
 
 		painter = Qt::Painter.new self
-
 		h, w = self.size().height(), self.size().width()
-
-
 		max = @darknet.stats.max
 
 		nbBars = darknet.stats.size
@@ -998,12 +897,10 @@ class StatsWidget < Qt::Widget
 			painter.setBrush Qt::Brush.new Qt::Color::new greyShade, greyShade, greyShade
 			painter.drawRect 0,h.to_f/nbBars*barNumber,@darknet.stats[barNumber].to_f / max * w, h.to_f/nbBars
 		end
-
 		painter.end
 
 	end # paintEvent
 end # class statsWidget
-
 
 app = Qt::Application.new ARGV
 MainWindow.new
